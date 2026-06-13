@@ -1,0 +1,7 @@
+Abstract 
+Briefly describe your work in 5-10 sentences(Take more if needed). Avoid jargon , write as if explaining to someone unfamiliar with the topic. Focus on what you did .
+Methodology
+Explain your process step by step .What dataset(Provide the link) you used, what the main objective was, and what tools or techniques you applied to solve the problem.
+Include a link to your code (Kaggle notebook, GitHub repo, or any public platform) so I can follow along or reproduce your work.
+Result	
+Summarize your findings in 5-10 sentences. Mention what evaluation metrics you used (e.g. accuracy, F1-score, RMSE)and report the results you achieved.

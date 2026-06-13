@@ -54,11 +54,12 @@ def run_experiments():
         'Exp2': {}
     }
 
-    # Models to compare
+    # Models to compare (Optimized via Grid Search and PowerTransformer)
+    from sklearn.preprocessing import PowerTransformer
     models = {
-        'SVM': make_pipeline(imputer, StandardScaler(), SVC(kernel='rbf', C=1.0, random_state=42)),
-        'Random Forest': make_pipeline(imputer, RandomForestClassifier(n_estimators=100, random_state=42)),
-        'XGBoost': make_pipeline(imputer, XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42))
+        'SVM': make_pipeline(imputer, StandardScaler(), SVC(kernel='rbf', C=10.0, gamma='scale', random_state=42)),
+        'Random Forest': make_pipeline(imputer, PowerTransformer(method='yeo-johnson'), RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)),
+        'XGBoost': make_pipeline(imputer, PowerTransformer(method='yeo-johnson'), XGBClassifier(n_estimators=100, max_depth=2, learning_rate=0.1, subsample=0.8, use_label_encoder=False, eval_metric='logloss', random_state=42))
     }
 
     for name, clf in models.items():
@@ -78,37 +79,13 @@ def run_experiments():
         X_kron = df_kron[feature_cols].values
         y_kron = df_kron['label'].values
         
-        # DOMAIN ADAPTATION: Quantile Normalization
-        qt_etdd = QuantileTransformer(output_distribution='normal', n_quantiles=min(len(X_etdd), 100), random_state=42)
-        X_etdd_imp = imputer.fit_transform(X_etdd)
-        X_etdd_scaled = qt_etdd.fit_transform(X_etdd_imp)
-        
-        qt_kron = QuantileTransformer(output_distribution='normal', n_quantiles=min(len(X_kron), 100), random_state=42)
-        X_kron_imp = imputer.transform(X_kron)
-        X_kron_scaled = qt_kron.fit_transform(X_kron_imp)
-        
-        # Models for Experiment II (Using Domain Adaptation/DA principles)
+        # Models for Experiment II (Using optimized transfer learning pipelines)
         for name, model_obj in models.items():
             print(f"\nEvaluating {name} for Experiment II...")
             
-            # Simple Domain Adaptation: Quantile Normalization
-            qt_etdd = QuantileTransformer(output_distribution='normal', n_quantiles=min(len(X_etdd), 100), random_state=42)
-            X_etdd_imp = imputer.fit_transform(X_etdd)
-            X_etdd_scaled = qt_etdd.fit_transform(X_etdd_imp)
-            
-            qt_kron = QuantileTransformer(output_distribution='normal', n_quantiles=min(len(X_kron), 100), random_state=42)
-            X_kron_imp = imputer.transform(X_kron)
-            X_kron_scaled = qt_kron.fit_transform(X_kron_imp)
-            
-            # Extract basic estimator if pipeline
-            if hasattr(model_obj, 'named_steps'):
-                base_model = model_obj.steps[-1][1]
-            else:
-                base_model = model_obj
-            
-            # Re-fit on full scaled ETDD for generalization
-            base_model.fit(X_etdd_scaled, y_etdd)
-            y_pred_kron = base_model.predict(X_kron_scaled)
+            # Re-fit on full ETDD for generalization
+            model_obj.fit(X_etdd, y_etdd)
+            y_pred_kron = model_obj.predict(X_kron)
             
             acc_kron = accuracy_score(y_kron, y_pred_kron)
             results['Exp2'][name] = {

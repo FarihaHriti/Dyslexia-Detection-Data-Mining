@@ -48,21 +48,42 @@ def calculate_ivt_features(df, x_col, y_col, t_col, timestamp_is_ms=True):
     # Identify fixations (vel < threshold)
     is_fix = vel < threshold
     
-    # Group consecutive fixations
+    # Group consecutive fixations and saccades
     fix_durations = []
-    current_dur = 0
-    for i, is_f in enumerate(is_fix):
-        if is_f:
-            current_dur += dt[i]
+    sac_amplitudes = []
+    regressions = 0
+    
+    i = 0
+    n = len(is_fix)
+    while i < n:
+        if is_fix[i]:
+            # Group fixation
+            start_idx = i
+            while i < n and is_fix[i]:
+                i += 1
+            end_idx = i
+            # Duration is the sum of time steps
+            dur = np.sum(dt[start_idx:end_idx])
+            fix_durations.append(dur)
         else:
-            if current_dur > 0:
-                fix_durations.append(current_dur)
-                current_dur = 0
-    if current_dur > 0: fix_durations.append(current_dur)
-    
-    # Saccade Amplitudes (dist where vel >= threshold)
-    sac_amplitudes = dist[~is_fix]
-    
+            # Group saccade
+            start_idx = i
+            while i < n and not is_fix[i]:
+                i += 1
+            end_idx = i
+            
+            # Saccade amplitude is the net Euclidean distance from start to end of saccade
+            sx = x[start_idx]
+            sy = y[start_idx]
+            ex = x[min(end_idx, len(x)-1)]
+            ey = y[min(end_idx, len(y)-1)]
+            amp = np.sqrt((ex - sx)**2 + (ey - sy)**2)
+            sac_amplitudes.append(amp)
+            
+            # Regression: net move left
+            if ex < sx:
+                regressions += 1
+                
     f_count = len(fix_durations)
     s_count = len(sac_amplitudes)
     
@@ -75,7 +96,7 @@ def calculate_ivt_features(df, x_col, y_col, t_col, timestamp_is_ms=True):
         'fixation_count': f_count,
         'saccade_count': s_count,
         'fix_sac_ratio': f_count / s_count if s_count > 0 else 0,
-        'regression_ratio': np.sum(dx[~is_fix] < 0) / len(dx[~is_fix]) if len(dx[~is_fix]) > 0 else 0
+        'regression_ratio': regressions / s_count if s_count > 0 else 0
     }
 
 def extract_features_v2(df, dataset_type='child'):
@@ -85,7 +106,7 @@ def extract_features_v2(df, dataset_type='child'):
         # Kronoberg: T, LX, LY, RX, RY. T is approx 20ms?
         # Clean numeric
         for col in ['LX', 'RX', 'LY', 'RY', 'T']:
-            if col in df.columns and df[col].dtype == object:
+            if col in df.columns and not pd.api.types.is_numeric_dtype(df[col]):
                 df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
@@ -98,12 +119,18 @@ def extract_features_v2(df, dataset_type='child'):
 
 def load_etdd70_data(base_path):
     # Load ETDD70
-    # Placeholder label logic: Odd SID = Dyslexic (1), Even = Control (0)
-    # TODO: Replace with actual label file or logic
-    print("WARNING: Using PLACEHOLDER labels for ETDD70 (Odd=Dyslexic, Even=Control).")
-    
     etdd_data = []
     data_dir = os.path.join(base_path, "datasets", "etdd700-data", "data")
+    label_file = os.path.join(base_path, "datasets", "etdd700-data", "dyslexia_class_label.csv")
+    
+    # Load ground truth labels
+    if os.path.exists(label_file):
+        labels_df = pd.read_csv(label_file)
+        label_map = dict(zip(labels_df['subject_id'].astype(int), labels_df['class_id'].astype(int)))
+        print(f"Loaded {len(label_map)} ground truth labels from dyslexia_class_label.csv")
+    else:
+        print("WARNING: Ground truth label file not found! Using fallback logic.")
+        label_map = {}
     
     # Get unique SIDs from filenames
     files = sorted(glob.glob(os.path.join(data_dir, "*_fixations.csv")))
@@ -115,9 +142,11 @@ def load_etdd70_data(base_path):
         
     for sid in sorted(sids):
         try:
-            # Hypothesis: ID range (balanced 26/27 split)
-            # IDs 10xx are one class, 11xx+ are another
-            label = 0 if int(sid) < 1100 else 1
+            sid_int = int(sid)
+            if sid_int in label_map:
+                label = label_map[sid_int]
+            else:
+                label = 0 if sid_int < 1100 else 1  # Fallback
             
             # Load Fixations
             fix_files = sorted(glob.glob(os.path.join(data_dir, f"Subject_{sid}_*_fixations.csv")))
