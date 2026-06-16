@@ -35,9 +35,9 @@ The following table summarizes the comparative performance of our evaluated arch
 
 | Model Architecture | Exp I Baseline | Exp I Optimized | Exp II Baseline | Exp II Optimized | Key Observation / Optimization Strategy |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **SVM** | 81.8% | **90.9%** | 52.4% | **73.5%** | Switched to linear kernel for Exp I. Applied `MinMaxScaler` and optimized RBF parameters ($C=0.5, \gamma=0.1$) for Exp II. |
-| **Random Forest** | 81.8% | **81.8%** | 57.8% | **76.8%** | Applied `PowerTransformer` scaling and optimized trees ($n=200, \text{max\_depth}=5$) for cross-dataset generalization. |
-| **XGBoost** | 63.6% | **72.7%** | 56.8% | **79.5%** | Scaled with `PowerTransformer` and regularized hyperparameters ($n=50, \text{learning\_rate}=0.05, \text{subsample}=0.8$) to mitigate domain shift. |
+| **SVM** | 81.8% | **90.9%** | 52.4% | **73.5%** | Switched to linear kernel for Exp I. Applied `MinMaxScaler` and optimized RBF parameters (C=0.5, gamma=0.1) for Exp II. |
+| **Random Forest** | 81.8% | **81.8%** | 57.8% | **76.8%** | Applied `PowerTransformer` scaling and optimized trees (n=200, max_depth=5) for cross-dataset generalization. |
+| **XGBoost** | 63.6% | **72.7%** | 56.8% | **79.5%** | Scaled with `PowerTransformer` and regularized hyperparameters (n=50, learning_rate=0.05, subsample=0.8) to mitigate domain shift. |
 
 ---
 
@@ -55,7 +55,7 @@ Detailed visual reports are generated to analyze model performance across both e
 
 #### 1. SVM (Support Vector Machine)
 *   **Exp I**: Linear kernel with `StandardScaler` provides an extremely clean hyperplane division, reaching **90.9%** accuracy.
-*   **Exp II**: Extremely sensitive to raw gaze coordinate offsets. Applying `MinMaxScaler` bound all features within $[0, 1]$, and tuning RBF kernel parameters raised accuracy to **73.5%**.
+*   **Exp II**: Extremely sensitive to raw gaze coordinate offsets. Applying `MinMaxScaler` bound all features within [0, 1], and tuning RBF kernel parameters raised accuracy to **73.5%**.
 
 #### 2. Random Forest (Bagging)
 *   **Exp I**: Strong baseline performance of **81.8%**.
@@ -63,7 +63,7 @@ Detailed visual reports are generated to analyze model performance across both e
 
 #### 3. XGBoost (Gradient Boosting)
 *   **Exp I**: Achieved **72.7%** accuracy with tuned regularization parameters.
-*   **Exp II**: The top performer at **79.5%**. Scaling the data using `PowerTransformer` combined with shallow trees ($\text{max\_depth}=3$) and a small learning rate ($0.05$) prevented overfitting to the training domain and successfully generalized to the Swedish Kronoberg dataset.
+*   **Exp II**: The top performer at **79.5%**. Scaling the data using `PowerTransformer` combined with shallow trees (max_depth=3) and a small learning rate (0.05) prevented overfitting to the training domain and successfully generalized to the Swedish Kronoberg dataset.
 
 ---
 
