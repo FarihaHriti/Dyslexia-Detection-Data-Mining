@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler, QuantileTransformer
+from sklearn.preprocessing import StandardScaler, QuantileTransformer, MinMaxScaler, PowerTransformer
 from data_loader import load_data
 
 def run_experiments():
@@ -54,14 +54,14 @@ def run_experiments():
         'Exp2': {}
     }
 
-    # Models to compare
-    models = {
-        'SVM': make_pipeline(imputer, StandardScaler(), SVC(kernel='rbf', C=1.0, random_state=42)),
+    # Models to compare for Experiment I (Intra-dataset)
+    models_exp1 = {
+        'SVM': make_pipeline(imputer, StandardScaler(), SVC(C=2.0, kernel='linear', random_state=42)),
         'Random Forest': make_pipeline(imputer, RandomForestClassifier(n_estimators=100, random_state=42)),
-        'XGBoost': make_pipeline(imputer, XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42))
+        'XGBoost': make_pipeline(imputer, XGBClassifier(n_estimators=50, max_depth=3, learning_rate=0.01, subsample=0.8, eval_metric='logloss', random_state=42))
     }
 
-    for name, clf in models.items():
+    for name, clf in models_exp1.items():
         print(f"\nTraining {name} for Experiment I...")
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
@@ -78,37 +78,38 @@ def run_experiments():
         X_kron = df_kron[feature_cols].values
         y_kron = df_kron['label'].values
         
-        # DOMAIN ADAPTATION: Quantile Normalization
-        qt_etdd = QuantileTransformer(output_distribution='normal', n_quantiles=min(len(X_etdd), 100), random_state=42)
-        X_etdd_imp = imputer.fit_transform(X_etdd)
-        X_etdd_scaled = qt_etdd.fit_transform(X_etdd_imp)
+        # Prepare components for Experiment II (Optimized)
+        configs_exp2 = {
+            'SVM': {
+                'scaler': MinMaxScaler(),
+                'model': SVC(C=0.5, gamma=0.1, kernel='rbf', random_state=42)
+            },
+            'Random Forest': {
+                'scaler': PowerTransformer(),
+                'model': RandomForestClassifier(n_estimators=200, max_depth=5, min_samples_split=2, random_state=42)
+            },
+            'XGBoost': {
+                'scaler': PowerTransformer(),
+                'model': XGBClassifier(n_estimators=50, max_depth=3, learning_rate=0.05, subsample=0.8, eval_metric='logloss', random_state=42)
+            }
+        }
         
-        qt_kron = QuantileTransformer(output_distribution='normal', n_quantiles=min(len(X_kron), 100), random_state=42)
-        X_kron_imp = imputer.transform(X_kron)
-        X_kron_scaled = qt_kron.fit_transform(X_kron_imp)
-        
-        # Models for Experiment II (Using Domain Adaptation/DA principles)
-        for name, model_obj in models.items():
+        for name, config in configs_exp2.items():
             print(f"\nEvaluating {name} for Experiment II...")
+            scaler = config['scaler']
+            model = config['model']
             
-            # Simple Domain Adaptation: Quantile Normalization
-            qt_etdd = QuantileTransformer(output_distribution='normal', n_quantiles=min(len(X_etdd), 100), random_state=42)
+            # Impute
             X_etdd_imp = imputer.fit_transform(X_etdd)
-            X_etdd_scaled = qt_etdd.fit_transform(X_etdd_imp)
-            
-            qt_kron = QuantileTransformer(output_distribution='normal', n_quantiles=min(len(X_kron), 100), random_state=42)
             X_kron_imp = imputer.transform(X_kron)
-            X_kron_scaled = qt_kron.fit_transform(X_kron_imp)
             
-            # Extract basic estimator if pipeline
-            if hasattr(model_obj, 'named_steps'):
-                base_model = model_obj.steps[-1][1]
-            else:
-                base_model = model_obj
+            # Scale
+            X_etdd_scaled = scaler.fit_transform(X_etdd_imp)
+            X_kron_scaled = scaler.transform(X_kron_imp)
             
-            # Re-fit on full scaled ETDD for generalization
-            base_model.fit(X_etdd_scaled, y_etdd)
-            y_pred_kron = base_model.predict(X_kron_scaled)
+            # Train and evaluate
+            model.fit(X_etdd_scaled, y_etdd)
+            y_pred_kron = model.predict(X_kron_scaled)
             
             acc_kron = accuracy_score(y_kron, y_pred_kron)
             results['Exp2'][name] = {

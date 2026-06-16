@@ -85,7 +85,7 @@ def extract_features_v2(df, dataset_type='child'):
         # Kronoberg: T, LX, LY, RX, RY. T is approx 20ms?
         # Clean numeric
         for col in ['LX', 'RX', 'LY', 'RY', 'T']:
-            if col in df.columns and df[col].dtype == object:
+            if col in df.columns:
                 df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
@@ -98,9 +98,14 @@ def extract_features_v2(df, dataset_type='child'):
 
 def load_etdd70_data(base_path):
     # Load ETDD70
-    # Placeholder label logic: Odd SID = Dyslexic (1), Even = Control (0)
-    # TODO: Replace with actual label file or logic
-    print("WARNING: Using PLACEHOLDER labels for ETDD70 (Odd=Dyslexic, Even=Control).")
+    label_file = os.path.join(base_path, "datasets", "etdd700-data", "dyslexia_class_label.csv")
+    label_map = {}
+    if os.path.exists(label_file):
+        df_labels = pd.read_csv(label_file)
+        for _, row in df_labels.iterrows():
+            label_map[str(row['subject_id'])] = int(row['class_id'])
+    else:
+        print("WARNING: dyslexia_class_label.csv not found, using fallback placeholder labels.")
     
     etdd_data = []
     data_dir = os.path.join(base_path, "datasets", "etdd700-data", "data")
@@ -115,9 +120,11 @@ def load_etdd70_data(base_path):
         
     for sid in sorted(sids):
         try:
-            # Hypothesis: ID range (balanced 26/27 split)
-            # IDs 10xx are one class, 11xx+ are another
-            label = 0 if int(sid) < 1100 else 1
+            # Get ground truth label from label map or fallback
+            if sid in label_map:
+                label = label_map[sid]
+            else:
+                label = 0 if int(sid) < 1100 else 1
             
             # Load Fixations
             fix_files = sorted(glob.glob(os.path.join(data_dir, f"Subject_{sid}_*_fixations.csv")))
