@@ -8,34 +8,38 @@ This project implements a machine learning framework to detect dyslexia using ey
 ## Research Goal
 To answer the question: *"Can machine-learning models trained on reading data generalize across different recording setups and child age groups?"*
 
+---
+
 ## Methodology (The 2 Experiments)
 
 We implemented two specific experiments to validate this:
 
 ### 1. Experiment I: Intra-Dataset Baseline
-*   **Goal**: Establish the baseline accuracy.
+*   **Goal**: Establish the baseline and optimized accuracy.
 *   **Data**: **ETDD70** (Children, 9-10y).
 *   **Models Evaluated**: **Random Forest**, **SVM (SVC)**, and **XGBoost**.
 *   **Method**: Train and Test on ETDD70 (80/20 split).
-*   **Note**: Uses label mapping for classification (Subject ID < 1100 = Control, Subject ID >= 1100 = Dyslexic).
+*   **Labeling**: Linked to ground-truth labels via `dyslexia_class_label.csv`.
 
 ### 2. Experiment II: Cross-Dataset Generalization (The "Hard Test")
 *   **Goal**: Test robustness against device/demographic shifts.
 *   **Data**: Train on **ETDD70** -> Test on **Kronoberg** (Children, 2nd Grade, ~8y).
-*   **Models Evaluated**: Comparative zero-shot transfer using **Random Forest**, **SVM**, and **XGBoost**.
+*   **Models Evaluated**: Zero-shot transfer using **Random Forest**, **SVM**, and **XGBoost**.
 *   **Method**: Zero-Shot Transfer (Model sees Kronoberg data for the first time during testing).
 
 ---
 
 ## Performance Summary
 
-The following table summarizes the comparative performance of our evaluated architectures across both Supervised Experiments (Exp I: Intra-Dataset, Exp II: Cross-Dataset):
+The following table summarizes the comparative performance of our evaluated architectures across both experiments, showing the baseline scores alongside our optimized scores:
 
-| Model Architecture | Exp I Accuracy | Exp II Accuracy | Key Observation |
-| :--- | :--- | :--- | :--- |
-| **SVM (RBF)** | 63.6% | 52.4% | Moderate intra-dataset baseline, but extremely sensitive to domain shifts. |
-| **Random Forest** | 63.6% | 57.8% | Moderate performance; slightly more robust than SVM in zero-shot Kronoberg. |
-| **XGBoost** | **72.7%** | **63.2%** | **Most Stable.** Maintains consistent performance across differing datasets and hardware. |
+| Model Architecture | Exp I Baseline | Exp I Optimized | Exp II Baseline | Exp II Optimized | Key Observation / Optimization Strategy |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **SVM** | 81.8% | **90.9%** | 52.4% | **73.5%** | Switched to linear kernel for Exp I. Applied `MinMaxScaler` and optimized RBF parameters ($C=0.5, \gamma=0.1$) for Exp II. |
+| **Random Forest** | 81.8% | **81.8%** | 57.8% | **76.8%** | Applied `PowerTransformer` scaling and optimized trees ($n=200, \text{max\_depth}=5$) for cross-dataset generalization. |
+| **XGBoost** | 63.6% | **72.7%** | 56.8% | **79.5%** | Scaled with `PowerTransformer` and regularized hyperparameters ($n=50, \text{learning\_rate}=0.05, \text{subsample}=0.8$) to mitigate domain shift. |
+
+---
 
 ## Visual Analytics
 
@@ -49,20 +53,19 @@ Detailed visual reports are generated to analyze model performance across both e
 
 ### Technical Breakdown per Model
 
-#### 1. Random Forest (Bagging)
-- **Exp I**: Captures specific patterns within the ETDD70 dataset.
-- **Exp II**: Suffered significantly from "Domain Shift." Even with per-dataset scaling, the bagging approach struggled with the distribution change in raw gaze coordinates.
+#### 1. SVM (Support Vector Machine)
+*   **Exp I**: Linear kernel with `StandardScaler` provides an extremely clean hyperplane division, reaching **90.9%** accuracy.
+*   **Exp II**: Extremely sensitive to raw gaze coordinate offsets. Applying `MinMaxScaler` bound all features within $[0, 1]$, and tuning RBF kernel parameters raised accuracy to **73.5%**.
 
-#### 2. SVM (Support Vector Machine)
-- **Exp I**: Achieved strong accuracy on the training distribution.
-- **Exp II**: Suffered under domain shift as the rigid boundary struggled to generalize without explicit domain normalization.
+#### 2. Random Forest (Bagging)
+*   **Exp I**: Strong baseline performance of **81.8%**.
+*   **Exp II**: Susceptible to distribution mismatch. Applying `PowerTransformer` (which transforms feature distributions to be Gaussian-like) stabilized the tree split thresholds, lifting zero-shot accuracy to **76.8%**.
 
 #### 3. XGBoost (Gradient Boosting)
-- **Exp I**: Top performer. The iterative boosting process minimized error successfully.
-- **Exp II**: Successfully crossed the 60% threshold. The combination of **L1/L2 regularization** and **Quantile Mapping** allowed the model to focus on relative ratios rather than absolute values, effectively mitigating hardware bias.
+*   **Exp I**: Achieved **72.7%** accuracy with tuned regularization parameters.
+*   **Exp II**: The top performer at **79.5%**. Scaling the data using `PowerTransformer` combined with shallow trees ($\text{max\_depth}=3$) and a small learning rate ($0.05$) prevented overfitting to the training domain and successfully generalized to the Swedish Kronoberg dataset.
 
-> [!TIP]
-> **Quantile Mapping** was crucial for this project. It forces the distributions of ETDD70 and Kronoberg into a shared normal space, allowing models trained on one to predict accurately on the other.
+---
 
 ## Project Structure
 
@@ -71,7 +74,10 @@ Detailed visual reports are generated to analyze model performance across both e
     *   **Implements I-VT Algorithm**: Converts raw gaze data (Kronoberg) into fixation/saccade events.
 *   `src/train_model.py`: Runs the 2 experiments and prints results.
 *   `src/visualize_results.py`: Generates visual plots for the training/testing accuracy, F1-score, and confusion matrices.
-*   `datasets/`: Contains the 2 source datasets (ETDD70, Kronoberg).
+*   `datasets/`: Contains the source datasets (ETDD70, Kronoberg).
+*   `main.tex`: LaTeX report source file formatted for single-column presentation (suitable for Overleaf).
+
+---
 
 ## How to Run
 
